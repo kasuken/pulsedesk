@@ -15,6 +15,7 @@ internal sealed class TrayIconService : IDisposable
     private const int WM_LBUTTONDBLCLK = 0x0203;
 
     private const int NIM_ADD = 0x00000000;
+    private const int NIM_MODIFY = 0x00000001;
     private const int NIM_DELETE = 0x00000002;
 
     private const int NIF_MESSAGE = 0x00000001;
@@ -26,6 +27,7 @@ internal sealed class TrayIconService : IDisposable
 
     private IntPtr _messageWindow;
     private IntPtr _iconHandle;
+    private IntPtr _dynamicIconHandle;
     private bool _iconAdded;
     private bool _disposed;
 
@@ -101,6 +103,92 @@ internal sealed class TrayIconService : IDisposable
 
     [DllImport("user32.dll")]
     private static extern IntPtr LoadIconW(IntPtr hInstance, IntPtr lpIconName);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateCompatibleDC(IntPtr hdc);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool DeleteDC(IntPtr hdc);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr SelectObject(IntPtr hdc, IntPtr h);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool DeleteObject(IntPtr ho);
+
+    [DllImport("gdi32.dll")]
+    private static extern int SetBkMode(IntPtr hdc, int mode);
+
+    [DllImport("gdi32.dll")]
+    private static extern int SetTextColor(IntPtr hdc, int color);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateDIBSection(
+        IntPtr hdc, ref BITMAPINFO pbmi, int usage,
+        out IntPtr ppvBits, IntPtr hSection, int offset);
+
+    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr CreateFontW(
+        int cHeight, int cWidth, int cEscapement, int cOrientation, int cWeight,
+        int bItalic, int bUnderline, int bStrikeOut, int iCharSet,
+        int iOutPrecision, int iClipPrecision, int iQuality, int iPitchAndFamily,
+        string pszFaceName);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BITMAPINFOHEADER
+    {
+        public int biSize;
+        public int biWidth;
+        public int biHeight;
+        public short biPlanes;
+        public short biBitCount;
+        public int biCompression;
+        public int biSizeImage;
+        public int biXPelsPerMeter;
+        public int biYPelsPerMeter;
+        public int biClrUsed;
+        public int biClrImportant;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BITMAPINFO
+    {
+        public BITMAPINFOHEADER bmiHeader;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ICONINFO
+    {
+        public bool fIcon;
+        public int xHotspot;
+        public int yHotspot;
+        public IntPtr hbmMask;
+        public IntPtr hbmColor;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int left, top, right, bottom;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr CreateIconIndirect(ref ICONINFO piconinfo);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int DrawTextW(IntPtr hdc, string lpchText, int cchText, ref RECT lprc, int format);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateBitmap(int nWidth, int nHeight, int nPlanes, int nBitCount, IntPtr lpBits);
+
+    private const int TRANSPARENT = 1;
+    private const int DT_CENTER = 0x01;
+    private const int DT_VCENTER = 0x04;
+    private const int DT_SINGLELINE = 0x20;
+    private const int DT_NOCLIP = 0x100;
+    private const int FW_BOLD = 700;
+    private const int ANTIALIASED_QUALITY = 4;
+    private const int DIB_RGB_COLORS = 0;
 
     #endregion
 
@@ -190,6 +278,113 @@ internal sealed class TrayIconService : IDisposable
         return DefWindowProcW(hWnd, msg, wParam, lParam);
     }
 
+    /// <summary>
+    /// Updates the tray icon to show the given CPU percentage as rendered text.
+    /// </summary>
+    public void UpdateCpuText(int percent)
+    {
+        if (_disposed || !_iconAdded) return;
+
+        var newIcon = CreateTextIcon(percent.ToString());
+        if (newIcon == IntPtr.Zero) return;
+
+        var nid = new NOTIFYICONDATAW
+        {
+            cbSize = Marshal.SizeOf<NOTIFYICONDATAW>(),
+            hWnd = _messageWindow,
+            uID = 1,
+            uFlags = NIF_ICON | NIF_TIP,
+            hIcon = newIcon,
+            szTip = $"PulseDesk · CPU {percent}%"
+        };
+
+        if (Shell_NotifyIconW(NIM_MODIFY, ref nid))
+        {
+            // Destroy the previous dynamic icon, keep the original static one.
+            if (_dynamicIconHandle != IntPtr.Zero)
+            {
+                DestroyIcon(_dynamicIconHandle);
+            }
+            _dynamicIconHandle = newIcon;
+        }
+        else
+        {
+            DestroyIcon(newIcon);
+        }
+    }
+
+    private static IntPtr CreateTextIcon(string text)
+    {
+        const int size = 16;
+
+        var hdc = CreateCompatibleDC(IntPtr.Zero);
+        if (hdc == IntPtr.Zero) return IntPtr.Zero;
+
+        IntPtr hBitmap = IntPtr.Zero;
+        IntPtr hMask = IntPtr.Zero;
+        IntPtr hFont = IntPtr.Zero;
+        IntPtr icon = IntPtr.Zero;
+
+        try
+        {
+            var bmi = new BITMAPINFO
+            {
+                bmiHeader = new BITMAPINFOHEADER
+                {
+                    biSize = Marshal.SizeOf<BITMAPINFOHEADER>(),
+                    biWidth = size,
+                    biHeight = -size, // top-down
+                    biPlanes = 1,
+                    biBitCount = 32,
+                    biCompression = 0
+                }
+            };
+
+            hBitmap = CreateDIBSection(hdc, ref bmi, DIB_RGB_COLORS, out _, IntPtr.Zero, 0);
+            if (hBitmap == IntPtr.Zero) return IntPtr.Zero;
+
+            var oldBitmap = SelectObject(hdc, hBitmap);
+
+            // Fill with transparent black (all zeros is already transparent for a 32-bit DIB).
+            // Draw white text so it's visible on most taskbar backgrounds.
+            SetBkMode(hdc, TRANSPARENT);
+            SetTextColor(hdc, 0x00FFFFFF); // white in BGR
+
+            // Use a compact font; shrink further for 3-digit "100".
+            var fontSize = text.Length >= 3 ? -9 : -11;
+            hFont = CreateFontW(
+                fontSize, 0, 0, 0, FW_BOLD,
+                0, 0, 0, 0, 0, 0, ANTIALIASED_QUALITY, 0, "Segoe UI");
+            var oldFont = SelectObject(hdc, hFont);
+
+            var rect = new RECT { left = 0, top = 0, right = size, bottom = size };
+            DrawTextW(hdc, text, text.Length, ref rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
+
+            SelectObject(hdc, oldFont);
+            SelectObject(hdc, oldBitmap);
+
+            // Create a monochrome mask bitmap (all zeros = fully opaque where color bitmap has alpha/color).
+            hMask = CreateBitmap(size, size, 1, 1, IntPtr.Zero);
+
+            var iconInfo = new ICONINFO
+            {
+                fIcon = true,
+                hbmMask = hMask,
+                hbmColor = hBitmap
+            };
+
+            icon = CreateIconIndirect(ref iconInfo);
+            return icon;
+        }
+        finally
+        {
+            if (hFont != IntPtr.Zero) DeleteObject(hFont);
+            if (hBitmap != IntPtr.Zero) DeleteObject(hBitmap);
+            if (hMask != IntPtr.Zero) DeleteObject(hMask);
+            DeleteDC(hdc);
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -209,6 +404,11 @@ internal sealed class TrayIconService : IDisposable
         if (_messageWindow != IntPtr.Zero)
         {
             DestroyWindow(_messageWindow);
+        }
+
+        if (_dynamicIconHandle != IntPtr.Zero)
+        {
+            DestroyIcon(_dynamicIconHandle);
         }
 
         if (_iconHandle != IntPtr.Zero)

@@ -248,6 +248,7 @@ namespace PulseDesk
             CpuValueText.Text = s.TotalPercent.ToString("F0", CultureInfo.CurrentCulture) + "%";
             CpuProgress.Value = s.TotalPercent;
             CpuDetailText.Text = $"User {s.UserPercent:F0}% · Kernel {s.KernelPercent:F0}% · Idle {s.IdlePercent:F0}%";
+            _trayIcon.UpdateCpuText((int)s.TotalPercent);
         }
 
         private void ApplyTopCpuProcesses(IReadOnlyList<ProcessCpuSample> samples)
