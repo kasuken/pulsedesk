@@ -35,6 +35,8 @@ namespace PulseDesk
         private readonly ObservableCollection<ProcessRowViewModel> _topMemoryItems = new();
         private readonly ObservableCollection<ProcessRowViewModel> _topGpuItems = new();
         private readonly TrayIconService _trayIcon;
+        private readonly TrayIconService _ramTrayIcon;
+        private readonly TrayIconService _gpuTrayIcon;
 
         private int _driveTickCounter = DriveTicksPerFetch; // sample drives on the first tick
         private bool _isFetching;
@@ -88,9 +90,14 @@ namespace PulseDesk
             _fetchTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(FetchIntervalMs) };
             _fetchTimer.Tick += FetchTick;
 
-            // Tray icon – minimize to tray, click to restore.
-            _trayIcon = new TrayIconService();
+            // Tray icons – minimize to tray, click to restore.
+            // Accent colors in BGR: blue for CPU, magenta for RAM, orange for GPU.
+            _trayIcon = new TrayIconService(iconId: 1, label: "PulseDesk · CPU", accentColor: 0x00E0A030);
             _trayIcon.Clicked += OnTrayIconClicked;
+            _ramTrayIcon = new TrayIconService(iconId: 2, label: "PulseDesk · RAM", accentColor: 0x00D050D0);
+            _ramTrayIcon.Clicked += OnTrayIconClicked;
+            _gpuTrayIcon = new TrayIconService(iconId: 3, label: "PulseDesk · GPU", accentColor: 0x000088FF);
+            _gpuTrayIcon.Clicked += OnTrayIconClicked;
 
             _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
             _subclassProc = OnSubclassWndProc;
@@ -116,6 +123,10 @@ namespace PulseDesk
 
             _trayIcon.Clicked -= OnTrayIconClicked;
             _trayIcon.Dispose();
+            _ramTrayIcon.Clicked -= OnTrayIconClicked;
+            _ramTrayIcon.Dispose();
+            _gpuTrayIcon.Clicked -= OnTrayIconClicked;
+            _gpuTrayIcon.Dispose();
 
             _fetchTimer.Stop();
             _fetchTimer.Tick -= FetchTick;
@@ -248,7 +259,7 @@ namespace PulseDesk
             CpuValueText.Text = s.TotalPercent.ToString("F0", CultureInfo.CurrentCulture) + "%";
             CpuProgress.Value = s.TotalPercent;
             CpuDetailText.Text = $"User {s.UserPercent:F0}% · Kernel {s.KernelPercent:F0}% · Idle {s.IdlePercent:F0}%";
-            _trayIcon.UpdateCpuText((int)s.TotalPercent);
+            _trayIcon.UpdatePercent((int)s.TotalPercent);
         }
 
         private void ApplyTopCpuProcesses(IReadOnlyList<ProcessCpuSample> samples)
@@ -283,6 +294,7 @@ namespace PulseDesk
             MemValueText.Text = s.LoadPercent.ToString(CultureInfo.CurrentCulture) + "%";
             MemProgress.Value = s.LoadPercent;
             MemDetailText.Text = $"{ByteFormatter.Format(s.UsedBytes)} used of {ByteFormatter.Format(s.TotalBytes)} ({ByteFormatter.Format(s.AvailableBytes)} free)";
+            _ramTrayIcon.UpdatePercent((int)s.LoadPercent);
         }
 
         private void ApplyGpu(GpuSample? sample)
@@ -308,6 +320,7 @@ namespace PulseDesk
             GpuProgress.Value = s.MaximumPercent;
             GpuDetailText.Text = $"Avg {s.AveragePercent:F0}% across 3D engines";
             GpuTopProcessesEmptyText.Text = "Measuring…";
+            _gpuTrayIcon.UpdatePercent((int)s.MaximumPercent);
         }
 
         private void ApplyTopGpuProcesses(IReadOnlyList<ProcessGpuSample> samples)

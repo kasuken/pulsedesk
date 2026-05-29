@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
 namespace PulseDesk.Services;
@@ -25,9 +26,13 @@ internal sealed class TrayIconService : IDisposable
     private const int IMAGE_ICON = 1;
     private const int LR_LOADFROMFILE = 0x00000010;
 
+    private readonly int _iconId;
+    private readonly string _label;
+    private readonly int _accentColor;
+    private readonly Dictionary<int, IntPtr> _iconCache = new();
     private IntPtr _messageWindow;
     private IntPtr _iconHandle;
-    private IntPtr _dynamicIconHandle;
+    private int _lastPercent = -1;
     private bool _iconAdded;
     private bool _disposed;
 
@@ -190,10 +195,19 @@ internal sealed class TrayIconService : IDisposable
     private const int ANTIALIASED_QUALITY = 4;
     private const int DIB_RGB_COLORS = 0;
 
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateSolidBrush(int color);
+
+    [DllImport("user32.dll")]
+    private static extern int FillRect(IntPtr hDC, ref RECT lprc, IntPtr hbr);
+
     #endregion
 
-    public TrayIconService()
+    public TrayIconService(int iconId = 1, string label = "PulseDesk", int accentColor = 0x00FF8800)
     {
+        _iconId = iconId;
+        _label = label;
+        _accentColor = accentColor;
         _wndProcDelegate = WndProc;
         CreateMessageWindow();
         LoadIcon();
@@ -203,7 +217,7 @@ internal sealed class TrayIconService : IDisposable
     private void CreateMessageWindow()
     {
         var hInstance = GetModuleHandleW(null);
-        var className = "PulseDesk_TrayMsg_" + Environment.ProcessId;
+        var className = $"PulseDesk_TrayMsg_{_iconId}_{Environment.ProcessId}";
 
         var wc = new WNDCLASSEXW
         {
@@ -254,11 +268,11 @@ internal sealed class TrayIconService : IDisposable
         {
             cbSize = Marshal.SizeOf<NOTIFYICONDATAW>(),
             hWnd = _messageWindow,
-            uID = 1,
+            uID = _iconId,
             uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP,
             uCallbackMessage = WM_TRAYICON,
             hIcon = _iconHandle,
-            szTip = "PulseDesk"
+            szTip = _label
         };
 
         _iconAdded = Shell_NotifyIconW(NIM_ADD, ref nid);
@@ -279,43 +293,45 @@ internal sealed class TrayIconService : IDisposable
     }
 
     /// <summary>
-    /// Updates the tray icon to show the given CPU percentage as rendered text.
+    /// Updates the tray icon to show the given percentage as rendered text with a dynamic fill.
+    /// Icons are cached by percent value (0–100) so repeated calls with the same value are free.
     /// </summary>
-    public void UpdateCpuText(int percent)
+    public void UpdatePercent(int percent)
     {
         if (_disposed || !_iconAdded) return;
 
-        var newIcon = CreateTextIcon(percent.ToString());
-        if (newIcon == IntPtr.Zero) return;
+        percent = Math.Clamp(percent, 0, 100);
+
+        // Nothing to do if the value hasn’t changed.
+        if (percent == _lastPercent) return;
+
+        if (!_iconCache.TryGetValue(percent, out var cachedIcon))
+        {
+            cachedIcon = CreateTextIcon(percent.ToString(), percent, _accentColor);
+            if (cachedIcon == IntPtr.Zero) return;
+            _iconCache[percent] = cachedIcon;
+        }
 
         var nid = new NOTIFYICONDATAW
         {
             cbSize = Marshal.SizeOf<NOTIFYICONDATAW>(),
             hWnd = _messageWindow,
-            uID = 1,
+            uID = _iconId,
             uFlags = NIF_ICON | NIF_TIP,
-            hIcon = newIcon,
-            szTip = $"PulseDesk · CPU {percent}%"
+            hIcon = cachedIcon,
+            szTip = $"{_label} {percent}%"
         };
 
         if (Shell_NotifyIconW(NIM_MODIFY, ref nid))
         {
-            // Destroy the previous dynamic icon, keep the original static one.
-            if (_dynamicIconHandle != IntPtr.Zero)
-            {
-                DestroyIcon(_dynamicIconHandle);
-            }
-            _dynamicIconHandle = newIcon;
-        }
-        else
-        {
-            DestroyIcon(newIcon);
+            _lastPercent = percent;
         }
     }
 
-    private static IntPtr CreateTextIcon(string text)
+    private static IntPtr CreateTextIcon(string text, int percent, int accentColor)
     {
         const int size = 16;
+        const int stripeHeight = 3;
 
         var hdc = CreateCompatibleDC(IntPtr.Zero);
         if (hdc == IntPtr.Zero) return IntPtr.Zero;
@@ -340,13 +356,61 @@ internal sealed class TrayIconService : IDisposable
                 }
             };
 
-            hBitmap = CreateDIBSection(hdc, ref bmi, DIB_RGB_COLORS, out _, IntPtr.Zero, 0);
+            hBitmap = CreateDIBSection(hdc, ref bmi, DIB_RGB_COLORS, out var bits, IntPtr.Zero, 0);
             if (hBitmap == IntPtr.Zero) return IntPtr.Zero;
 
             var oldBitmap = SelectObject(hdc, hBitmap);
 
-            // Fill with transparent black (all zeros is already transparent for a 32-bit DIB).
-            // Draw white text so it's visible on most taskbar backgrounds.
+            // Fill the entire icon with a dark background (semi-transparent dark gray).
+            var darkBrush = CreateSolidBrush(0x00303030); // BGR dark gray
+            var fullRect = new RECT { left = 0, top = 0, right = size, bottom = size };
+            FillRect(hdc, ref fullRect, darkBrush);
+            DeleteObject(darkBrush);
+
+            // Fill from the bottom up proportionally to the percentage.
+            // Color: green (0-65%), yellow (66-85%), red (86-100%).
+            int fillColor = percent switch
+            {
+                <= 65 => 0x0000B050,  // BGR green
+                <= 85 => 0x0000C8E0,  // BGR yellow/amber
+                _     => 0x000035E0   // BGR red
+            };
+
+            var fillHeight = (int)((size - stripeHeight) * Math.Clamp(percent, 0, 100) / 100.0);
+            if (fillHeight > 0)
+            {
+                var fillBrush = CreateSolidBrush(fillColor);
+                var fillRect = new RECT
+                {
+                    left = 0,
+                    top = size - fillHeight,
+                    right = size,
+                    bottom = size
+                };
+                FillRect(hdc, ref fillRect, fillBrush);
+                DeleteObject(fillBrush);
+            }
+
+            // Draw a colored accent stripe at the top to identify the metric.
+            var accentBrush = CreateSolidBrush(accentColor);
+            var accentRect = new RECT { left = 0, top = 0, right = size, bottom = stripeHeight };
+            FillRect(hdc, ref accentRect, accentBrush);
+            DeleteObject(accentBrush);
+
+            // Set pixel alpha to fully opaque for all pixels.
+            if (bits != IntPtr.Zero)
+            {
+                unsafe
+                {
+                    var p = (byte*)bits;
+                    for (var i = 0; i < size * size; i++)
+                    {
+                        p[i * 4 + 3] = 0xFF; // alpha channel
+                    }
+                }
+            }
+
+            // Draw white text on top.
             SetBkMode(hdc, TRANSPARENT);
             SetTextColor(hdc, 0x00FFFFFF); // white in BGR
 
@@ -363,7 +427,7 @@ internal sealed class TrayIconService : IDisposable
             SelectObject(hdc, oldFont);
             SelectObject(hdc, oldBitmap);
 
-            // Create a monochrome mask bitmap (all zeros = fully opaque where color bitmap has alpha/color).
+            // Create a monochrome mask bitmap (all zeros = fully opaque).
             hMask = CreateBitmap(size, size, 1, 1, IntPtr.Zero);
 
             var iconInfo = new ICONINFO
@@ -396,7 +460,7 @@ internal sealed class TrayIconService : IDisposable
             {
                 cbSize = Marshal.SizeOf<NOTIFYICONDATAW>(),
                 hWnd = _messageWindow,
-                uID = 1
+                uID = _iconId
             };
             Shell_NotifyIconW(NIM_DELETE, ref nid);
         }
@@ -406,10 +470,11 @@ internal sealed class TrayIconService : IDisposable
             DestroyWindow(_messageWindow);
         }
 
-        if (_dynamicIconHandle != IntPtr.Zero)
+        foreach (var handle in _iconCache.Values)
         {
-            DestroyIcon(_dynamicIconHandle);
+            DestroyIcon(handle);
         }
+        _iconCache.Clear();
 
         if (_iconHandle != IntPtr.Zero)
         {
