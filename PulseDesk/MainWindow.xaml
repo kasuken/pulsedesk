@@ -1,0 +1,285 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="PulseDesk.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:PulseDesk"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="PulseDesk">
+
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <Grid SizeChanged="OnRootSizeChanged">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border
+            Grid.Row="0"
+            Padding="28,24,28,18"
+            BorderThickness="0,0,0,1"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+            <StackPanel Spacing="4">
+                <TextBlock
+                    Text="PulseDesk"
+                    Style="{ThemeResource TitleLargeTextBlockStyle}" />
+                <TextBlock
+                    Text="Your Windows machine, explained."
+                    Opacity="0.75"
+                    Style="{ThemeResource BodyTextBlockStyle}" />
+                <TextBlock
+                    x:Name="SummaryText"
+                    Margin="0,6,0,0"
+                    FontWeight="SemiBold"
+                    Opacity="0.85"
+                    Style="{ThemeResource BodyTextBlockStyle}"
+                    Text="Collecting initial metrics…" />
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Padding="28,20,28,28" Spacing="20">
+
+                <Grid x:Name="MetricGrid" ColumnSpacing="16" RowSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border x:Name="CpuCard" Grid.Column="0" Style="{StaticResource MetricCardStyle}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="CPU" Style="{StaticResource MetricLabelStyle}" />
+                            <TextBlock x:Name="CpuValueText" Text="—" Style="{StaticResource MetricValueStyle}" />
+                            <ProgressBar x:Name="CpuProgress" Minimum="0" Maximum="100" Value="0" />
+                            <TextBlock x:Name="CpuDetailText" Text="Initializing…" Style="{StaticResource MetricDetailStyle}" />
+                            <StackPanel Spacing="4" Margin="0,4,0,0">
+                                <TextBlock Text="TOP PROCESSES" Style="{StaticResource MetricLabelStyle}" FontSize="10" />
+                                <ItemsControl x:Name="CpuTopProcessesList">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Spacing="2" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="local:ProcessRowViewModel">
+                                            <Grid ColumnSpacing="8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock
+                                                    Grid.Column="0"
+                                                    Text="{x:Bind Name}"
+                                                    FontSize="12"
+                                                    TextTrimming="CharacterEllipsis" />
+                                                <TextBlock
+                                                    Grid.Column="1"
+                                                    Text="{x:Bind ValueLabel}"
+                                                    FontSize="12"
+                                                    FontWeight="SemiBold"
+                                                    Opacity="0.85" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock
+                                    x:Name="CpuTopProcessesEmptyText"
+                                    Text="Measuring…"
+                                    Style="{StaticResource MetricDetailStyle}"
+                                    FontSize="11" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <Border x:Name="MemCard" Grid.Column="1" Style="{StaticResource MetricCardStyle}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="MEMORY" Style="{StaticResource MetricLabelStyle}" />
+                            <TextBlock x:Name="MemValueText" Text="—" Style="{StaticResource MetricValueStyle}" />
+                            <ProgressBar x:Name="MemProgress" Minimum="0" Maximum="100" Value="0" />
+                            <TextBlock x:Name="MemDetailText" Text="Initializing…" Style="{StaticResource MetricDetailStyle}" />
+                            <StackPanel Spacing="4" Margin="0,4,0,0">
+                                <TextBlock Text="TOP PROCESSES" Style="{StaticResource MetricLabelStyle}" FontSize="10" />
+                                <ItemsControl x:Name="MemTopProcessesList">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Spacing="2" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="local:ProcessRowViewModel">
+                                            <Grid ColumnSpacing="8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock
+                                                    Grid.Column="0"
+                                                    Text="{x:Bind Name}"
+                                                    FontSize="12"
+                                                    TextTrimming="CharacterEllipsis" />
+                                                <TextBlock
+                                                    Grid.Column="1"
+                                                    Text="{x:Bind ValueLabel}"
+                                                    FontSize="12"
+                                                    FontWeight="SemiBold"
+                                                    Opacity="0.85" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock
+                                    x:Name="MemTopProcessesEmptyText"
+                                    Text="Measuring…"
+                                    Style="{StaticResource MetricDetailStyle}"
+                                    FontSize="11" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <Border x:Name="GpuCard" Grid.Column="2" Style="{StaticResource MetricCardStyle}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="GPU" Style="{StaticResource MetricLabelStyle}" />
+                            <TextBlock x:Name="GpuValueText" Text="—" Style="{StaticResource MetricValueStyle}" />
+                            <ProgressBar x:Name="GpuProgress" Minimum="0" Maximum="100" Value="0" />
+                            <TextBlock x:Name="GpuDetailText" Text="Initializing…" Style="{StaticResource MetricDetailStyle}" />
+                            <StackPanel Spacing="4" Margin="0,4,0,0">
+                                <TextBlock Text="TOP PROCESSES" Style="{StaticResource MetricLabelStyle}" FontSize="10" />
+                                <ItemsControl x:Name="GpuTopProcessesList">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Spacing="2" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="local:ProcessRowViewModel">
+                                            <Grid ColumnSpacing="8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock
+                                                    Grid.Column="0"
+                                                    Text="{x:Bind Name}"
+                                                    FontSize="12"
+                                                    TextTrimming="CharacterEllipsis" />
+                                                <TextBlock
+                                                    Grid.Column="1"
+                                                    Text="{x:Bind ValueLabel}"
+                                                    FontSize="12"
+                                                    FontWeight="SemiBold"
+                                                    Opacity="0.85" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock
+                                    x:Name="GpuTopProcessesEmptyText"
+                                    Text="Measuring…"
+                                    Style="{StaticResource MetricDetailStyle}"
+                                    FontSize="11" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <Border x:Name="TempCard" Grid.Column="3" Style="{StaticResource MetricCardStyle}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="TEMPERATURE" Style="{StaticResource MetricLabelStyle}" />
+                            <TextBlock x:Name="TempValueText" Text="—" Style="{StaticResource MetricValueStyle}" />
+                            <ProgressBar x:Name="TempProgress" Minimum="0" Maximum="100" Value="0" />
+                            <TextBlock x:Name="TempDetailText" Text="Initializing…" Style="{StaticResource MetricDetailStyle}" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border x:Name="NetCard" Grid.Column="4" Style="{StaticResource MetricCardStyle}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="NETWORK" Style="{StaticResource MetricLabelStyle}" />
+                            <TextBlock x:Name="NetValueText" Text="—" Style="{StaticResource MetricValueStyle}" />
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="DOWN" Style="{StaticResource MetricLabelStyle}" FontSize="10" />
+                                    <TextBlock x:Name="NetDownText" Text="—" FontWeight="SemiBold" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="UP" Style="{StaticResource MetricLabelStyle}" FontSize="10" />
+                                    <TextBlock x:Name="NetUpText" Text="—" FontWeight="SemiBold" />
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock x:Name="NetDetailText" Text="Initializing…" Style="{StaticResource MetricDetailStyle}" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <StackPanel Spacing="10">
+                    <TextBlock
+                        Text="Drives"
+                        Style="{ThemeResource SubtitleTextBlockStyle}" />
+                    <TextBlock
+                        x:Name="DrivesEmptyText"
+                        Text="No fixed drives detected."
+                        Opacity="0.7"
+                        Visibility="Collapsed"
+                        Style="{ThemeResource BodyTextBlockStyle}" />
+                    <ItemsControl x:Name="DrivesList">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Spacing="10" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="local:DriveViewModel">
+                                <Border Style="{StaticResource MetricCardStyle}">
+                                    <Grid ColumnSpacing="16">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <Border
+                                            Grid.Column="0"
+                                            Width="44" Height="44"
+                                            CornerRadius="8"
+                                            Background="{ThemeResource AccentFillColorDefaultBrush}"
+                                            VerticalAlignment="Center">
+                                            <TextBlock
+                                                Text="{x:Bind Letter}"
+                                                Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
+                                                FontWeight="SemiBold"
+                                                FontSize="20"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center" />
+                                        </Border>
+
+                                        <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center">
+                                            <TextBlock Text="{x:Bind Title}" FontWeight="SemiBold" />
+                                            <ProgressBar Minimum="0" Maximum="100" Value="{x:Bind UsedPercent}" />
+                                            <TextBlock Text="{x:Bind Detail}" Style="{StaticResource MetricDetailStyle}" />
+                                        </StackPanel>
+
+                                        <TextBlock
+                                            Grid.Column="2"
+                                            Text="{x:Bind PercentLabel}"
+                                            Style="{ThemeResource SubtitleTextBlockStyle}"
+                                            VerticalAlignment="Center" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>

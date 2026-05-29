@@ -1,0 +1,35 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+publish/
+
+# Visual Studio and VS Code workspace state
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Rider
+.idea/
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+
+# Test output
+TestResults/
+BenchmarkDotNet.Artifacts/
+
+# Windows packaging output
+AppPackages/
+BundleArtifacts/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
