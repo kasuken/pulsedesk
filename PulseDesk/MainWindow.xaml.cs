@@ -27,6 +27,7 @@ namespace PulseDesk
         private readonly NetworkService _network = new();
         private readonly DriveService _drives = new();
         private readonly GpuTopProcessesService _topGpuProcesses = new();
+        private readonly BatteryService _battery = new();
         private readonly TopProcessesService _topProcesses = new();
         private readonly DispatcherTimer _fetchTimer;
         private readonly ObservableCollection<DriveViewModel> _driveItems = new();
@@ -170,7 +171,8 @@ namespace PulseDesk
                     _temperature.IsAvailable ? _temperature.Read() : null,
                     _network.IsAvailable ? _network.Read() : null,
                     sampleDrives ? _drives.Read() : null,
-                    _topProcesses.Read(TopProcessCount)));
+                    _topProcesses.Read(TopProcessCount),
+                    _battery.IsAvailable ? _battery.Read() : null));
 
                 ApplyCpu(snapshot.Cpu);
                 ApplyTopCpuProcesses(snapshot.TopProcesses.ByCpu);
@@ -180,6 +182,7 @@ namespace PulseDesk
                 ApplyTopGpuProcesses(snapshot.TopGpuProcesses);
                 ApplyTemperature(snapshot.Temperature);
                 ApplyNetwork(snapshot.Network);
+                ApplyBattery(snapshot.Battery);
                 if (snapshot.Drives is not null)
                 {
                     ApplyDrives(snapshot.Drives);
@@ -205,7 +208,7 @@ namespace PulseDesk
                 < 560 => 1,
                 < 900 => 2,
                 < 1200 => 3,
-                _ => 5
+                _ => 6
             };
             ApplyMetricColumns(columns);
         }
@@ -219,7 +222,7 @@ namespace PulseDesk
                 MetricGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             }
 
-            var cards = new[] { CpuCard, MemCard, GpuCard, TempCard, NetCard };
+            var cards = new[] { CpuCard, MemCard, GpuCard, TempCard, NetCard, BatteryCard };
             var rowsNeeded = (int)Math.Ceiling(cards.Length / (double)columns);
             for (var r = 0; r < rowsNeeded; r++)
             {
@@ -371,6 +374,37 @@ namespace PulseDesk
             return ByteFormatter.Format((long)bytesPerSecond) + "/s";
         }
 
+        private void ApplyBattery(BatterySample? sample)
+        {
+            if (!_battery.IsAvailable)
+            {
+                ShowUnavailable(BatteryValueText, BatteryProgress, BatteryDetailText, "No battery detected.");
+                return;
+            }
+
+            if (sample is null)
+            {
+                ShowUnavailable(BatteryValueText, BatteryProgress, BatteryDetailText, "Battery data unavailable.");
+                return;
+            }
+
+            var s = sample.Value;
+            BatteryValueText.Text = s.ChargePercent.ToString(CultureInfo.CurrentCulture) + "%";
+            BatteryProgress.Value = s.ChargePercent;
+
+            var status = s.IsCharging ? "Charging" : s.IsOnAcPower ? "Plugged in" : "On battery";
+            if (s.IsBatterySaver) status += " · Saver on";
+
+            if (s.RemainingTime is { } remaining)
+            {
+                var hours = (int)remaining.TotalHours;
+                var minutes = remaining.Minutes;
+                status += hours > 0 ? $" · {hours}h {minutes}m left" : $" · {minutes}m left";
+            }
+
+            BatteryDetailText.Text = status;
+        }
+
         private void ApplyDrives(IReadOnlyList<DriveSample> samples)
         {
             _driveItems.Clear();
@@ -395,6 +429,11 @@ namespace PulseDesk
             if (snapshot.Network is { } net)
             {
                 parts.Add($"NET ↓{FormatRate(net.ReceivedBytesPerSecond)} ↑{FormatRate(net.SentBytesPerSecond)}");
+            }
+            if (snapshot.Battery is { } bat)
+            {
+                var icon = bat.IsCharging ? "⚡" : "🔋";
+                parts.Add($"{icon} {bat.ChargePercent}%");
             }
             if (_driveItems.Count > 0)
             {
@@ -421,7 +460,8 @@ namespace PulseDesk
             TemperatureSample? Temperature,
             NetworkSample? Network,
             IReadOnlyList<DriveSample>? Drives,
-            TopProcessesSnapshot TopProcesses);
+            TopProcessesSnapshot TopProcesses,
+            BatterySample? Battery);
     }
 }
 

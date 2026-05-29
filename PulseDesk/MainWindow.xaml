@@ -52,6 +52,7 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 
                     <Border x:Name="CpuCard" Grid.Column="0" Style="{StaticResource MetricCardStyle}">
@@ -217,6 +218,15 @@
                                 </StackPanel>
                             </Grid>
                             <TextBlock x:Name="NetDetailText" Text="Initializing…" Style="{StaticResource MetricDetailStyle}" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border x:Name="BatteryCard" Grid.Column="5" Style="{StaticResource MetricCardStyle}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="BATTERY" Style="{StaticResource MetricLabelStyle}" />
+                            <TextBlock x:Name="BatteryValueText" Text="—" Style="{StaticResource MetricValueStyle}" />
+                            <ProgressBar x:Name="BatteryProgress" Minimum="0" Maximum="100" Value="0" />
+                            <TextBlock x:Name="BatteryDetailText" Text="Initializing…" Style="{StaticResource MetricDetailStyle}" />
                         </StackPanel>
                     </Border>
                 </Grid>
