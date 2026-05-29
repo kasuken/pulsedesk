@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 namespace PulseDesk
@@ -32,10 +33,47 @@ namespace PulseDesk
         private readonly ObservableCollection<ProcessRowViewModel> _topCpuItems = new();
         private readonly ObservableCollection<ProcessRowViewModel> _topMemoryItems = new();
         private readonly ObservableCollection<ProcessRowViewModel> _topGpuItems = new();
+        private readonly TrayIconService _trayIcon;
 
         private int _driveTickCounter = DriveTicksPerFetch; // sample drives on the first tick
         private bool _isFetching;
         private bool _disposed;
+        private IntPtr _hwnd;
+
+        // Must be stored as a field so the GC does not collect the delegate while
+        // the subclass is still installed on the window.
+        private SubclassProc? _subclassProc;
+
+        #region Win32 interop for minimize-to-tray
+
+        private const int WM_SIZE = 0x0005;
+        private const int SIZE_MINIMIZED = 1;
+        private const int SW_HIDE = 0;
+        private const int SW_RESTORE = 9;
+
+        private delegate IntPtr SubclassProc(
+            IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam,
+            nuint uIdSubclass, nuint dwRefData);
+
+        [DllImport("comctl32.dll")]
+        private static extern bool SetWindowSubclass(
+            IntPtr hWnd, SubclassProc pfnSubclass, nuint uIdSubclass, nuint dwRefData);
+
+        [DllImport("comctl32.dll")]
+        private static extern bool RemoveWindowSubclass(
+            IntPtr hWnd, SubclassProc pfnSubclass, nuint uIdSubclass);
+
+        [DllImport("comctl32.dll")]
+        private static extern IntPtr DefSubclassProc(
+            IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        #endregion
 
         public MainWindow()
         {
@@ -49,6 +87,14 @@ namespace PulseDesk
             _fetchTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(FetchIntervalMs) };
             _fetchTimer.Tick += FetchTick;
 
+            // Tray icon – minimize to tray, click to restore.
+            _trayIcon = new TrayIconService();
+            _trayIcon.Clicked += OnTrayIconClicked;
+
+            _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            _subclassProc = OnSubclassWndProc;
+            SetWindowSubclass(_hwnd, _subclassProc, 0, 0);
+
             Closed += OnClosed;
 
             // Counters need a tick to produce real values, so the very first CPU/GPU readings
@@ -61,12 +107,42 @@ namespace PulseDesk
         {
             if (_disposed) return;
             _disposed = true;
+
+            if (_subclassProc is not null)
+            {
+                RemoveWindowSubclass(_hwnd, _subclassProc, 0);
+            }
+
+            _trayIcon.Clicked -= OnTrayIconClicked;
+            _trayIcon.Dispose();
+
             _fetchTimer.Stop();
             _fetchTimer.Tick -= FetchTick;
             _cpu.Dispose();
             _gpu.Dispose();
             _temperature.Dispose();
             _topGpuProcesses.Dispose();
+        }
+
+        private IntPtr OnSubclassWndProc(
+            IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam,
+            nuint uIdSubclass, nuint dwRefData)
+        {
+            if (uMsg == WM_SIZE && (int)wParam == SIZE_MINIMIZED)
+            {
+                // Hide the window from the taskbar; the tray icon stays visible.
+                ShowWindow(_hwnd, SW_HIDE);
+                return IntPtr.Zero;
+            }
+
+            return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+        }
+
+        private void OnTrayIconClicked()
+        {
+            ShowWindow(_hwnd, SW_RESTORE);
+            SetForegroundWindow(_hwnd);
+            Activate();
         }
 
         private async void FetchTick(object? sender, object e)
