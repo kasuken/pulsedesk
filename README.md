@@ -1,75 +1,63 @@
 <!-- markdownlint-disable MD033 -->
 <div align="center">
 
-<img src="./assets/logo/logo.png" alt="PulseDesk logo" width="420" />
-
-# PulseDesk
+<img src="./assets/logo/logo.png" alt="PulseDesk logo" width="280" />
 
 **Your Windows machine, explained.**
 
-A native, local-first Windows system health dashboard built with WinUI 3 and .NET. PulseDesk gives you a compact live view of CPU, RAM, GPU, network activity, temperatures, drives, and the top processes behind the load.
+[![.NET](https://img.shields.io/badge/.NET_10-512BD4?style=flat-square&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![WinUI 3](https://img.shields.io/badge/WinUI_3-0078D4?style=flat-square&logo=windows&logoColor=white)](https://learn.microsoft.com/windows/apps/winui/winui3/)
+[![Windows App SDK](https://img.shields.io/badge/Windows_App_SDK-2.1-00a2ed?style=flat-square)](https://learn.microsoft.com/windows/apps/windows-app-sdk/)
+[![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 
-[Overview](#overview) • [Features](#features) • [Getting Started](#getting-started) • [Project Structure](#project-structure) • [Troubleshooting](#troubleshooting)
-
-</div>
-
-## Screenshot
-
-<div align="center">
-
-<img src="./assets/screenshots/1.png" alt="PulseDesk application screenshot" width="1200" />
+[Overview](#overview) · [Features](#features) · [Getting started](#getting-started) · [What PulseDesk shows](#what-pulsedesk-shows) · [Project structure](#project-structure) · [Troubleshooting](#troubleshooting)
 
 </div>
+
+<p align="center">
+  <img src="./assets/screenshots/1.png" alt="PulseDesk screenshot" width="960" />
+</p>
 
 ## Overview
 
-PulseDesk is designed for the moment your PC feels slow and Task Manager does not give you the full picture fast enough. It keeps the experience focused: a single desktop window, live metrics, and short summaries that help you understand what the machine is doing right now.
+PulseDesk is a native, local-first Windows desktop app that gives you a compact, live view of your system health — CPU, RAM, GPU, network, temperatures, drives, and the top processes behind the load. It is designed for the moment your PC feels slow and Task Manager doesn't give you the full picture fast enough.
 
-> [!IMPORTANT]
-> PulseDesk is currently a Windows-only desktop app. The active project targets WinUI 3 on .NET 8 and uses Windows performance counters and system APIs that are not available cross-platform.
+A single window, live metrics, and short summaries that help you understand what the machine is doing right now.
 
 > [!NOTE]
-> The app is intentionally local-first and lightweight. It does not require a browser, a cloud service, or background infrastructure.
+> PulseDesk is intentionally local-first and lightweight. No browser, no cloud service, no background infrastructure required.
+
+> [!IMPORTANT]
+> PulseDesk is a Windows-only desktop app targeting WinUI 3 on .NET 10 with Windows performance counters and system APIs that are not available cross-platform.
 
 ## Features
 
-- Live CPU usage with user, kernel, and idle breakdown
-- Live memory usage with used, free, and total memory details
-- Live GPU activity using Windows GPU engine counters
-- Top CPU, memory, and GPU processes surfaced inline with each metric
-- Network throughput for the active adapter with upload and download rates
-- Temperature monitoring when Windows exposes thermal sensors
-- Fixed-drive capacity and utilization cards
-- Responsive WinUI layout that collapses from 5 columns down to 1 on narrower windows
+- **CPU** — Live usage with user, kernel, and idle breakdown, plus top processes
+- **Memory** — Used, free, and total physical memory with top processes by working set
+- **GPU** — Real-time GPU engine utilization with top GPU-heavy processes
+- **Network** — Download and upload throughput for the active adapter
+- **Temperature** — Thermal zone monitoring when Windows exposes sensors
+- **Drives** — Fixed-drive capacity, free space, and utilization at a glance
+- **Battery** — Charge percentage, AC/battery status, and remaining time (laptops)
+- **System tray** — Minimizes to the notification area for always-on monitoring
+- **Responsive layout** — Adapts from 6 columns down to 1 on narrower windows
+- **Mica backdrop** — Native Windows 11 material for a clean, modern look
 
-## Tech Stack
-
-- .NET 10
-- WinUI 3 with Windows App SDK
-- CommunityToolkit WinUI controls
-- Native Windows performance counters and system APIs
-- MSIX-ready project configuration with publish profiles for x86, x64, and ARM64
-
-## Getting Started
+## Getting started
 
 ### Prerequisites
 
 - Windows 10 version 1809 or later
-- .NET 10 SDK
-- Git
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- [Git](https://git-scm.com/downloads)
 
-If you want the smoothest editing and packaging experience, Visual Studio 2022 with WinUI and Windows App SDK tooling is a good fit, but the project can also be built and run from the command line.
+Visual Studio 2022 with the WinUI and Windows App SDK workloads gives the best editing and packaging experience, but the project builds and runs from the command line too.
 
-### Clone the repository
+### Clone and build
 
 ```powershell
 git clone https://github.com/kasuken/pulsedesk.git
 cd pulsedesk
-```
-
-### Restore and build
-
-```powershell
 dotnet restore PulseDesk.slnx
 dotnet build PulseDesk.slnx
 ```
@@ -80,77 +68,70 @@ dotnet build PulseDesk.slnx
 dotnet run --project .\PulseDesk\PulseDesk.csproj
 ```
 
-The main app project lives in the PulseDesk folder and opens as a native Windows desktop window.
+The app opens as a native Windows desktop window with live-updating metrics.
 
-## What PulseDesk Shows
+## What PulseDesk shows
 
-### CPU
+| Card | Source | Details |
+|------|--------|---------|
+| **CPU** | Performance counters | Total load, user/kernel/idle split, top processes |
+| **Memory** | `GlobalMemoryStatusEx` | Load %, used/available/total, top processes by working set |
+| **GPU** | GPU Engine counters | 3D engine utilization, top GPU-heavy processes |
+| **Temperature** | Thermal Zone counters | Current and peak temps (hardware-dependent) |
+| **Network** | Network adapter stats | Download/upload throughput on the active adapter |
+| **Drives** | `DriveInfo` | Label, file system, capacity, free space, utilization |
+| **Battery** | `GetSystemPowerStatus` | Charge %, AC/battery, remaining time, battery saver |
 
-PulseDesk samples total CPU load plus user, kernel, and idle time, then smooths recent samples to reduce jitter. It also lists the top CPU-consuming processes in the current window.
+> [!TIP]
+> Some metrics depend on the counters, drivers, and sensors exposed by the current machine. "Unavailable" usually means the underlying Windows data source is missing, not that PulseDesk failed.
 
-### Memory
+## Tech stack
 
-Memory shows current load percentage, used memory, available memory, and total physical memory. The memory card also surfaces the top processes by working set.
+- **.NET 10** with nullable reference types
+- **WinUI 3** with Windows App SDK 2.1
+- **CommunityToolkit.WinUI** controls
+- Native Windows performance counters and system APIs
+- MSIX-ready packaging with publish profiles for **x86**, **x64**, and **ARM64**
 
-### GPU
-
-GPU monitoring uses the Windows GPU Engine performance counter category and currently focuses on 3D engine utilization. If available, PulseDesk also shows the top GPU-heavy processes.
-
-### Temperature
-
-Temperature readings come from the Windows Thermal Zone Information counters. On some machines these counters are not exposed, so this card may show as unavailable.
-
-### Network
-
-The network card tracks the active non-loopback, non-tunnel adapter and displays current download and upload throughput.
-
-### Drives
-
-Drive cards summarize fixed local drives, including label, file system, total capacity, free space, and utilization.
-
-## Project Structure
+## Project structure
 
 ```text
-PulseDesk.slnx
-assets/
-  logo/
+PulseDesk.slnx                Root solution
 PulseDesk/
-  App.xaml
-  MainWindow.xaml
-  MainWindow.xaml.cs
-  DriveViewModel.cs
-  ProcessRowViewModel.cs
+  App.xaml(.cs)               Application entry point
+  MainWindow.xaml(.cs)        Main dashboard window
+  DriveViewModel.cs           Drive card data model
+  ProcessRowViewModel.cs      Top-process row data model
   Services/
-    CpuService.cs
-    MemoryService.cs
-    GpuService.cs
-    GpuTopProcessesService.cs
-    NetworkService.cs
-    TemperatureService.cs
-    DriveService.cs
-    TopProcessesService.cs
+    CpuService.cs             CPU sampling and smoothing
+    MemoryService.cs           Memory usage via Win32
+    GpuService.cs              GPU engine utilization
+    GpuTopProcessesService.cs  GPU top processes
+    NetworkService.cs          Network throughput
+    TemperatureService.cs      Thermal zone readings
+    DriveService.cs            Fixed-drive enumeration
+    BatteryService.cs          Battery and power status
+    TopProcessesService.cs     CPU/memory top processes
+    TrayIconService.cs         System tray icon (Win32)
+    ByteFormatter.cs           Human-readable byte formatting
+assets/
+  logo/                       App logo
+  screenshots/                App screenshots
 ```
 
 ## Troubleshooting
 
-> [!TIP]
-> Some metrics depend on the counters, drivers, and sensors exposed by the current machine. "Unavailable" usually means the underlying Windows data source is missing or inaccessible, not that PulseDesk itself failed to start.
+Common situations:
 
-Common cases:
+- **First readings show zero** — CPU and GPU counters need a short warm-up period after launch.
+- **GPU unavailable** — GPU Engine performance counters may be disabled or not exposed on some systems.
+- **Temperature unavailable** — Many desktops and some laptops do not publish thermal zone data through Windows.
+- **Network shows nothing** — PulseDesk tracks the active non-loopback, non-tunnel adapter. VPN and virtual adapters are ignored.
 
-- The first CPU or GPU reading can briefly show low or zero values while counters warm up.
-- GPU metrics may be unavailable on systems where the GPU Engine performance counters are disabled or not exposed.
-- Temperature metrics may be unavailable on desktops or laptops that do not publish thermal zone data through Windows.
-- Network metrics follow the currently selected active adapter and ignore loopback, tunnel, VPN, and some virtual adapters.
-
-If the app fails to build or run, start with these commands:
+If the app fails to build or run:
 
 ```powershell
 dotnet restore PulseDesk.slnx
 dotnet build PulseDesk.slnx
 dotnet run --project .\PulseDesk\PulseDesk.csproj
 ```
-
-## Current Direction
-
-PulseDesk is currently centered on one job: making Windows system load legible at a glance. The current implementation focuses on live visibility into CPU, RAM, GPU, disk, network, temperatures, and bottleneck clues without turning into a heavyweight monitoring suite.
