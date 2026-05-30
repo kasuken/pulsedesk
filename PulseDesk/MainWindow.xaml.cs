@@ -30,11 +30,13 @@ namespace PulseDesk
         private readonly DriveService _drives = new();
         private readonly BatteryService _battery = new();
         private readonly TopProcessesService _topProcesses = new();
+        private readonly BottleneckService _bottlenecks = new();
         private readonly DispatcherTimer _fetchTimer;
         private readonly ObservableCollection<DriveViewModel> _driveItems = new();
         private readonly ObservableCollection<ProcessRowViewModel> _topCpuItems = new();
         private readonly ObservableCollection<ProcessRowViewModel> _topMemoryItems = new();
         private readonly ObservableCollection<ProcessRowViewModel> _topGpuItems = new();
+        private readonly ObservableCollection<string> _lagFindingItems = new();
         private readonly SettingsService _settings = new();
         private TrayIconService? _trayIcon;
         private TrayIconService? _ramTrayIcon;
@@ -43,6 +45,10 @@ namespace PulseDesk
 
         private int _driveTickCounter = DriveTicksPerFetch; // sample drives on the first tick
         private int _processTickCounter = ProcessTicksPerFetch; // sample processes on the first tick
+        private IReadOnlyList<DriveSample> _lastDriveSamples = [];
+        private IReadOnlyList<ProcessCpuSample> _lastTopCpuSamples = [];
+        private IReadOnlyList<ProcessMemorySample> _lastTopMemorySamples = [];
+        private IReadOnlyList<ProcessGpuSample> _lastTopGpuSamples = [];
         private bool _isFetching;
         private bool _disposed;
         private IntPtr _hwnd;
@@ -90,6 +96,7 @@ namespace PulseDesk
             CpuTopProcessesList.ItemsSource = _topCpuItems;
             MemTopProcessesList.ItemsSource = _topMemoryItems;
             GpuTopProcessesList.ItemsSource = _topGpuItems;
+            LagFindingsList.ItemsSource = _lagFindingItems;
 
             _fetchTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(_settings.PollingIntervalMs) };
             _fetchTimer.Tick += FetchTick;
@@ -190,11 +197,14 @@ namespace PulseDesk
                 ApplyGpu(snapshot.Gpu);
                 if (snapshot.TopProcesses is { } topProcesses)
                 {
+                    _lastTopCpuSamples = topProcesses.ByCpu;
+                    _lastTopMemorySamples = topProcesses.ByMemory;
                     ApplyTopCpuProcesses(topProcesses.ByCpu);
                     ApplyTopMemoryProcesses(topProcesses.ByMemory);
                 }
                 if (snapshot.TopGpuProcesses is { } topGpuProcesses)
                 {
+                    _lastTopGpuSamples = topGpuProcesses;
                     ApplyTopGpuProcesses(topGpuProcesses);
                 }
                 ApplyTemperature(snapshot.Temperature);
@@ -202,9 +212,11 @@ namespace PulseDesk
                 ApplyBattery(snapshot.Battery);
                 if (snapshot.Drives is not null)
                 {
+                    _lastDriveSamples = snapshot.Drives;
                     ApplyDrives(snapshot.Drives);
                 }
-                ApplySummary(snapshot);
+                var lagReport = ApplyLagAnalysis(snapshot);
+                ApplySummary(snapshot, lagReport);
             }
             catch (Exception ex)
             {
@@ -324,7 +336,7 @@ namespace PulseDesk
             var s = sample.Value;
             SetText(GpuValueText, s.MaximumPercent.ToString("F0", CultureInfo.CurrentCulture) + "%");
             SetValue(GpuProgress, s.MaximumPercent);
-            // SetText(GpuDetailText, $"Avg {s.AveragePercent:F0}% across 3D engines");
+            SetText(GpuDetailText, $"Avg {s.AveragePercent:F0}% across 3D engines");
             GpuTopProcessesEmptyText.Text = "Measuring…";
             _gpuTrayIcon?.UpdatePercent((int)s.MaximumPercent);
         }
@@ -435,7 +447,49 @@ namespace PulseDesk
             DrivesEmptyText.Visibility = _driveItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        private void ApplySummary(MetricsSnapshot snapshot)
+        private BottleneckReport ApplyLagAnalysis(MetricsSnapshot snapshot)
+        {
+            var report = _bottlenecks.Analyze(
+                snapshot.Cpu,
+                snapshot.Memory,
+                snapshot.Gpu,
+                snapshot.Temperature,
+                snapshot.Battery,
+                snapshot.Drives ?? _lastDriveSamples,
+                snapshot.TopProcesses?.ByCpu ?? _lastTopCpuSamples,
+                snapshot.TopProcesses?.ByMemory ?? _lastTopMemorySamples,
+                snapshot.TopGpuProcesses ?? _lastTopGpuSamples);
+
+            var status = report.Overall switch
+            {
+                BottleneckSeverity.Critical => "Status: Critical bottleneck detected",
+                BottleneckSeverity.Warning => "Status: Bottleneck detected",
+                BottleneckSeverity.Watch => "Status: Watch for slowdown",
+                _ => "Status: Stable"
+            };
+
+            SetText(LagStatusText, status);
+            _lagFindingItems.Clear();
+
+            var maxItems = Math.Min(3, report.Findings.Count);
+            for (var i = 0; i < maxItems; i++)
+            {
+                var finding = report.Findings[i];
+                var label = finding.Severity switch
+                {
+                    BottleneckSeverity.Critical => "CRITICAL",
+                    BottleneckSeverity.Warning => "WARNING",
+                    BottleneckSeverity.Watch => "WATCH",
+                    _ => "OK"
+                };
+
+                _lagFindingItems.Add($"{label}: {finding.Headline} - {finding.Detail}");
+            }
+
+            return report;
+        }
+
+        private void ApplySummary(MetricsSnapshot snapshot, BottleneckReport lagReport)
         {
             var parts = new List<string>();
             if (snapshot.Cpu is { } cpu)
@@ -458,6 +512,11 @@ namespace PulseDesk
             if (_driveItems.Count > 0)
             {
                 parts.Add($"{_driveItems.Count} drive{(_driveItems.Count == 1 ? "" : "s")}");
+            }
+
+            if (lagReport.Findings.Count > 0)
+            {
+                parts.Add($"Lag {lagReport.Findings[0].Headline}");
             }
 
             SetText(SummaryText, parts.Count == 0

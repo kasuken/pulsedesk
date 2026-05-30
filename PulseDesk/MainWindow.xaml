@@ -242,6 +242,34 @@
                     </Border>
                 </Grid>
 
+                <Border Style="{StaticResource MetricCardStyle}">
+                    <StackPanel Spacing="8">
+                        <TextBlock
+                            Text="Why it feels slow"
+                            Style="{ThemeResource SubtitleTextBlockStyle}" />
+                        <TextBlock
+                            x:Name="LagStatusText"
+                            Text="Status: Collecting data"
+                            FontWeight="SemiBold"
+                            Style="{ThemeResource BodyTextBlockStyle}" />
+                        <ItemsControl x:Name="LagFindingsList">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="4" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <TextBlock
+                                        Text="{Binding}"
+                                        TextWrapping="Wrap"
+                                        Style="{StaticResource MetricDetailStyle}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
                 <StackPanel Spacing="10">
                     <TextBlock
                         Text="Drives"
