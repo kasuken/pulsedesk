@@ -14,10 +14,12 @@ namespace PulseDesk
     public sealed partial class MainWindow : Window
     {
         // Single timer ticks at the live cadence (RunCat365 uses 1000 ms). Cheap metrics
-        // (CPU/GPU/Memory/Temperature) sample every tick; drives are gated by a counter
-        // so they refresh every Nth tick instead of on every poll.
+        // (CPU/GPU/Memory/Temperature) sample every tick. The expensive samplers are gated
+        // by counters so they refresh every Nth tick instead of on every poll: drives, and
+        // the top-process lists which enumerate every process / GPU engine counter.
         private const int FetchIntervalMs = 1000;
         private const int DriveTicksPerFetch = 50;
+        private const int ProcessTicksPerFetch = 3;
         private const int TopProcessCount = 3;
 
         private readonly CpuService _cpu = new();
@@ -26,7 +28,6 @@ namespace PulseDesk
         private readonly TemperatureService _temperature = new();
         private readonly NetworkService _network = new();
         private readonly DriveService _drives = new();
-        private readonly GpuTopProcessesService _topGpuProcesses = new();
         private readonly BatteryService _battery = new();
         private readonly TopProcessesService _topProcesses = new();
         private readonly DispatcherTimer _fetchTimer;
@@ -41,6 +42,7 @@ namespace PulseDesk
         private SettingsPage? _settingsPage;
 
         private int _driveTickCounter = DriveTicksPerFetch; // sample drives on the first tick
+        private int _processTickCounter = ProcessTicksPerFetch; // sample processes on the first tick
         private bool _isFetching;
         private bool _disposed;
         private IntPtr _hwnd;
@@ -126,7 +128,6 @@ namespace PulseDesk
             _cpu.Dispose();
             _gpu.Dispose();
             _temperature.Dispose();
-            _topGpuProcesses.Dispose();
         }
 
         private IntPtr OnSubclassWndProc(
@@ -167,25 +168,35 @@ namespace PulseDesk
                 var sampleDrives = forceDrives || _driveTickCounter >= DriveTicksPerFetch;
                 if (sampleDrives) _driveTickCounter = 0;
 
+                _processTickCounter += 1;
+                var sampleProcesses = forceDrives || _processTickCounter >= ProcessTicksPerFetch;
+                if (sampleProcesses) _processTickCounter = 0;
+
                 // Move all sampling off the UI thread; PerformanceCounter.NextValue() and
                 // DriveInfo can briefly block, especially on the first poll or on slow disks.
                 var snapshot = await Task.Run(() => new MetricsSnapshot(
                     _cpu.Read(),
                     _memory.Read(),
                     _gpu.IsAvailable ? _gpu.Read() : null,
-                    _topGpuProcesses.IsAvailable ? _topGpuProcesses.Read(TopProcessCount) : [],
+                    sampleProcesses && _gpu.IsAvailable ? _gpu.GetTopProcesses(TopProcessCount) : null,
                     _temperature.IsAvailable ? _temperature.Read() : null,
                     _network.IsAvailable ? _network.Read() : null,
                     sampleDrives ? _drives.Read() : null,
-                    _topProcesses.Read(TopProcessCount),
+                    sampleProcesses ? _topProcesses.Read(TopProcessCount) : null,
                     _battery.IsAvailable ? _battery.Read() : null));
 
                 ApplyCpu(snapshot.Cpu);
-                ApplyTopCpuProcesses(snapshot.TopProcesses.ByCpu);
                 ApplyMemory(snapshot.Memory);
-                ApplyTopMemoryProcesses(snapshot.TopProcesses.ByMemory);
                 ApplyGpu(snapshot.Gpu);
-                ApplyTopGpuProcesses(snapshot.TopGpuProcesses);
+                if (snapshot.TopProcesses is { } topProcesses)
+                {
+                    ApplyTopCpuProcesses(topProcesses.ByCpu);
+                    ApplyTopMemoryProcesses(topProcesses.ByMemory);
+                }
+                if (snapshot.TopGpuProcesses is { } topGpuProcesses)
+                {
+                    ApplyTopGpuProcesses(topGpuProcesses);
+                }
                 ApplyTemperature(snapshot.Temperature);
                 ApplyNetwork(snapshot.Network);
                 ApplyBattery(snapshot.Battery);
@@ -251,9 +262,9 @@ namespace PulseDesk
             }
 
             var s = sample.Value;
-            CpuValueText.Text = s.TotalPercent.ToString("F0", CultureInfo.CurrentCulture) + "%";
-            CpuProgress.Value = s.TotalPercent;
-            CpuDetailText.Text = $"User {s.UserPercent:F0}% · Kernel {s.KernelPercent:F0}% · Idle {s.IdlePercent:F0}%";
+            SetText(CpuValueText, s.TotalPercent.ToString("F0", CultureInfo.CurrentCulture) + "%");
+            SetValue(CpuProgress, s.TotalPercent);
+            SetText(CpuDetailText, $"User {s.UserPercent:F0}% · Kernel {s.KernelPercent:F0}% · Idle {s.IdlePercent:F0}%");
             _trayIcon?.UpdatePercent((int)s.TotalPercent);
         }
 
@@ -286,9 +297,9 @@ namespace PulseDesk
             }
 
             var s = sample.Value;
-            MemValueText.Text = s.LoadPercent.ToString(CultureInfo.CurrentCulture) + "%";
-            MemProgress.Value = s.LoadPercent;
-            MemDetailText.Text = $"{ByteFormatter.Format(s.UsedBytes)} used of {ByteFormatter.Format(s.TotalBytes)} ({ByteFormatter.Format(s.AvailableBytes)} free)";
+            SetText(MemValueText, s.LoadPercent.ToString(CultureInfo.CurrentCulture) + "%");
+            SetValue(MemProgress, s.LoadPercent);
+            SetText(MemDetailText, $"{ByteFormatter.Format(s.UsedBytes)} used of {ByteFormatter.Format(s.TotalBytes)} ({ByteFormatter.Format(s.AvailableBytes)} free)");
             _ramTrayIcon?.UpdatePercent((int)s.LoadPercent);
         }
 
@@ -311,9 +322,9 @@ namespace PulseDesk
             }
 
             var s = sample.Value;
-            GpuValueText.Text = s.MaximumPercent.ToString("F0", CultureInfo.CurrentCulture) + "%";
-            GpuProgress.Value = s.MaximumPercent;
-            GpuDetailText.Text = $"Avg {s.AveragePercent:F0}% across 3D engines";
+            SetText(GpuValueText, s.MaximumPercent.ToString("F0", CultureInfo.CurrentCulture) + "%");
+            SetValue(GpuProgress, s.MaximumPercent);
+            SetText(GpuDetailText, $"Avg {s.AveragePercent:F0}% across 3D engines");
             GpuTopProcessesEmptyText.Text = "Measuring…";
             _gpuTrayIcon?.UpdatePercent((int)s.MaximumPercent);
         }
@@ -343,39 +354,39 @@ namespace PulseDesk
             }
 
             var s = sample.Value;
-            TempValueText.Text = s.MaximumCelsius.ToString("F0", CultureInfo.CurrentCulture) + "°C";
+            SetText(TempValueText, s.MaximumCelsius.ToString("F0", CultureInfo.CurrentCulture) + "°C");
             // Map 30°C -> 0%, 95°C -> 100% for the bar visualization.
             var normalized = Math.Clamp((s.MaximumCelsius - 30.0) / (95.0 - 30.0) * 100.0, 0, 100);
-            TempProgress.Value = normalized;
-            TempDetailText.Text = $"Avg {s.AverageCelsius:F0}°C · peak {s.MaximumCelsius:F0}°C";
+            SetValue(TempProgress, normalized);
+            SetText(TempDetailText, $"Avg {s.AverageCelsius:F0}°C · peak {s.MaximumCelsius:F0}°C");
         }
 
         private void ApplyNetwork(NetworkSample? sample)
         {
             if (!_network.IsAvailable)
             {
-                NetValueText.Text = "—";
-                NetDownText.Text = "—";
-                NetUpText.Text = "—";
-                NetDetailText.Text = "Unavailable · No active network adapter.";
+                SetText(NetValueText, "—");
+                SetText(NetDownText, "—");
+                SetText(NetUpText, "—");
+                SetText(NetDetailText, "Unavailable · No active network adapter.");
                 return;
             }
 
             if (sample is null)
             {
-                NetValueText.Text = "—";
-                NetDownText.Text = "—";
-                NetUpText.Text = "—";
-                NetDetailText.Text = "Unavailable · Adapter statistics unavailable.";
+                SetText(NetValueText, "—");
+                SetText(NetDownText, "—");
+                SetText(NetUpText, "—");
+                SetText(NetDetailText, "Unavailable · Adapter statistics unavailable.");
                 return;
             }
 
             var s = sample.Value;
             var total = s.SentBytesPerSecond + s.ReceivedBytesPerSecond;
-            NetValueText.Text = FormatRate(total);
-            NetDownText.Text = FormatRate(s.ReceivedBytesPerSecond);
-            NetUpText.Text = FormatRate(s.SentBytesPerSecond);
-            NetDetailText.Text = s.InterfaceName;
+            SetText(NetValueText, FormatRate(total));
+            SetText(NetDownText, FormatRate(s.ReceivedBytesPerSecond));
+            SetText(NetUpText, FormatRate(s.SentBytesPerSecond));
+            SetText(NetDetailText, s.InterfaceName);
         }
 
         private static string FormatRate(double bytesPerSecond)
@@ -398,8 +409,8 @@ namespace PulseDesk
             }
 
             var s = sample.Value;
-            BatteryValueText.Text = s.ChargePercent.ToString(CultureInfo.CurrentCulture) + "%";
-            BatteryProgress.Value = s.ChargePercent;
+            SetText(BatteryValueText, s.ChargePercent.ToString(CultureInfo.CurrentCulture) + "%");
+            SetValue(BatteryProgress, s.ChargePercent);
 
             var status = s.IsCharging ? "Charging" : s.IsOnAcPower ? "Plugged in" : "On battery";
             if (s.IsBatterySaver) status += " · Saver on";
@@ -411,7 +422,7 @@ namespace PulseDesk
                 status += hours > 0 ? $" · {hours}h {minutes}m left" : $" · {minutes}m left";
             }
 
-            BatteryDetailText.Text = status;
+            SetText(BatteryDetailText, status);
         }
 
         private void ApplyDrives(IReadOnlyList<DriveSample> samples)
@@ -449,16 +460,34 @@ namespace PulseDesk
                 parts.Add($"{_driveItems.Count} drive{(_driveItems.Count == 1 ? "" : "s")}");
             }
 
-            SummaryText.Text = parts.Count == 0
+            SetText(SummaryText, parts.Count == 0
                 ? "Collecting metrics…"
-                : string.Join("  ·  ", parts);
+                : string.Join("  ·  ", parts));
         }
 
         private static void ShowUnavailable(TextBlock value, ProgressBar bar, TextBlock detail, string reason)
         {
-            value.Text = "—";
-            bar.Value = 0;
-            detail.Text = $"Unavailable · {reason}";
+            SetText(value, "—");
+            SetValue(bar, 0);
+            SetText(detail, $"Unavailable · {reason}");
+        }
+
+        // Assigning an identical value still schedules WinUI composition/layout work, so the
+        // per-tick gauges only write when the rendered value actually changes.
+        private static void SetText(TextBlock target, string text)
+        {
+            if (!string.Equals(target.Text, text, StringComparison.Ordinal))
+            {
+                target.Text = text;
+            }
+        }
+
+        private static void SetValue(ProgressBar bar, double value)
+        {
+            if (bar.Value != value)
+            {
+                bar.Value = value;
+            }
         }
 
         private void OnSettingsClicked(object sender, RoutedEventArgs e)
@@ -528,11 +557,11 @@ namespace PulseDesk
             CpuSample? Cpu,
             MemorySample? Memory,
             GpuSample? Gpu,
-            IReadOnlyList<ProcessGpuSample> TopGpuProcesses,
+            IReadOnlyList<ProcessGpuSample>? TopGpuProcesses,
             TemperatureSample? Temperature,
             NetworkSample? Network,
             IReadOnlyList<DriveSample>? Drives,
-            TopProcessesSnapshot TopProcesses,
+            TopProcessesSnapshot? TopProcesses,
             BatterySample? Battery);
     }
 }

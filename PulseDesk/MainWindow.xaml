@@ -303,6 +303,7 @@
             </StackPanel>
         </ScrollViewer>
 
-        <ContentControl x:Name="SettingsHost" Grid.Row="1" Visibility="Collapsed" />
+        <ContentControl x:Name="SettingsHost" Grid.Row="1" Visibility="Collapsed"
+                        HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
     </Grid>
 </Window>

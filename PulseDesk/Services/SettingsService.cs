@@ -44,7 +44,7 @@ public sealed class SettingsService
 
     public int PollingIntervalMs
     {
-        get => GetInt(nameof(PollingIntervalMs), 1000);
+        get => GetInt(nameof(PollingIntervalMs), 1500);
         set => Set(nameof(PollingIntervalMs), value);
     }
 

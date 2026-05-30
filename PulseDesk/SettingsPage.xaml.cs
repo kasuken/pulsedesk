@@ -59,7 +59,7 @@ public sealed partial class SettingsPage : UserControl
             }
         }
 
-        PollingIntervalComboBox.SelectedIndex = 1; // Default: 1 second
+        PollingIntervalComboBox.SelectedIndex = 2; // Default: 1.5 seconds
     }
 
     private void OnSettingToggled(object sender, RoutedEventArgs e)

@@ -5,8 +5,10 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:CommunityToolkit.WinUI.Controls">
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Padding="28,20,28,28" Spacing="4">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Padding="40,28,40,40" Spacing="4"
+                    MaxWidth="1000"
+                    HorizontalAlignment="Stretch">
 
             <TextBlock
                 Text="Settings"
@@ -63,6 +65,7 @@
                 <ComboBox x:Name="PollingIntervalComboBox" MinWidth="150">
                     <ComboBoxItem Tag="500" Content="500 ms" />
                     <ComboBoxItem Tag="1000" Content="1 second" />
+                    <ComboBoxItem Tag="1500" Content="1.5 seconds" />
                     <ComboBoxItem Tag="2000" Content="2 seconds" />
                     <ComboBoxItem Tag="5000" Content="5 seconds" />
                 </ComboBox>
