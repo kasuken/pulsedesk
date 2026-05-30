@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="PulseDesk.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Padding="28,20,28,28" Spacing="4">
+
+            <TextBlock
+                Text="Settings"
+                Style="{ThemeResource TitleLargeTextBlockStyle}"
+                Margin="0,0,0,20" />
+
+            <!-- System Tray -->
+            <TextBlock
+                Text="System tray"
+                Style="{ThemeResource BodyStrongTextBlockStyle}"
+                Margin="0,0,0,4" />
+
+            <controls:SettingsExpander
+                Header="Tray icons"
+                Description="Show metric values in the notification area"
+                IsExpanded="True">
+                <controls:SettingsExpander.HeaderIcon>
+                    <FontIcon Glyph="&#xE7ED;" />
+                </controls:SettingsExpander.HeaderIcon>
+                <controls:SettingsExpander.Items>
+                    <controls:SettingsCard Header="CPU" Description="Show CPU usage in the system tray">
+                        <ToggleSwitch x:Name="CpuTrayToggle" />
+                    </controls:SettingsCard>
+                    <controls:SettingsCard Header="RAM" Description="Show memory usage in the system tray">
+                        <ToggleSwitch x:Name="RamTrayToggle" />
+                    </controls:SettingsCard>
+                    <controls:SettingsCard Header="GPU" Description="Show GPU usage in the system tray">
+                        <ToggleSwitch x:Name="GpuTrayToggle" />
+                    </controls:SettingsCard>
+                </controls:SettingsExpander.Items>
+            </controls:SettingsExpander>
+
+            <!-- Behavior -->
+            <TextBlock
+                Text="Behavior"
+                Style="{ThemeResource BodyStrongTextBlockStyle}"
+                Margin="0,16,0,4" />
+
+            <controls:SettingsCard
+                Header="Minimize to tray"
+                Description="Hide the window to the system tray when minimized">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE921;" />
+                </controls:SettingsCard.HeaderIcon>
+                <ToggleSwitch x:Name="MinimizeToTrayToggle" />
+            </controls:SettingsCard>
+
+            <controls:SettingsCard
+                Header="Polling interval"
+                Description="How often metrics are refreshed">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE916;" />
+                </controls:SettingsCard.HeaderIcon>
+                <ComboBox x:Name="PollingIntervalComboBox" MinWidth="150">
+                    <ComboBoxItem Tag="500" Content="500 ms" />
+                    <ComboBoxItem Tag="1000" Content="1 second" />
+                    <ComboBoxItem Tag="2000" Content="2 seconds" />
+                    <ComboBoxItem Tag="5000" Content="5 seconds" />
+                </ComboBox>
+            </controls:SettingsCard>
+
+            <!-- About -->
+            <TextBlock
+                Text="About"
+                Style="{ThemeResource BodyStrongTextBlockStyle}"
+                Margin="0,16,0,4" />
+
+            <controls:SettingsCard
+                Header="PulseDesk"
+                Description="Your Windows machine, explained.">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE946;" />
+                </controls:SettingsCard.HeaderIcon>
+                <TextBlock
+                    x:Name="VersionText"
+                    Style="{ThemeResource CaptionTextBlockStyle}"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </controls:SettingsCard>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

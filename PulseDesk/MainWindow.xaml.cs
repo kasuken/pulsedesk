@@ -34,9 +34,11 @@ namespace PulseDesk
         private readonly ObservableCollection<ProcessRowViewModel> _topCpuItems = new();
         private readonly ObservableCollection<ProcessRowViewModel> _topMemoryItems = new();
         private readonly ObservableCollection<ProcessRowViewModel> _topGpuItems = new();
-        private readonly TrayIconService _trayIcon;
-        private readonly TrayIconService _ramTrayIcon;
-        private readonly TrayIconService _gpuTrayIcon;
+        private readonly SettingsService _settings = new();
+        private TrayIconService? _trayIcon;
+        private TrayIconService? _ramTrayIcon;
+        private TrayIconService? _gpuTrayIcon;
+        private SettingsPage? _settingsPage;
 
         private int _driveTickCounter = DriveTicksPerFetch; // sample drives on the first tick
         private bool _isFetching;
@@ -87,17 +89,11 @@ namespace PulseDesk
             MemTopProcessesList.ItemsSource = _topMemoryItems;
             GpuTopProcessesList.ItemsSource = _topGpuItems;
 
-            _fetchTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(FetchIntervalMs) };
+            _fetchTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(_settings.PollingIntervalMs) };
             _fetchTimer.Tick += FetchTick;
 
-            // Tray icons – minimize to tray, click to restore.
-            // Accent colors in BGR: blue for CPU, magenta for RAM, orange for GPU.
-            _trayIcon = new TrayIconService(iconId: 1, label: "PulseDesk · CPU", accentColor: 0x00E0A030);
-            _trayIcon.Clicked += OnTrayIconClicked;
-            _ramTrayIcon = new TrayIconService(iconId: 2, label: "PulseDesk · RAM", accentColor: 0x00D050D0);
-            _ramTrayIcon.Clicked += OnTrayIconClicked;
-            _gpuTrayIcon = new TrayIconService(iconId: 3, label: "PulseDesk · GPU", accentColor: 0x000088FF);
-            _gpuTrayIcon.Clicked += OnTrayIconClicked;
+            // Create tray icons according to persisted settings.
+            ApplyTrayIconSettings();
 
             _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
             _subclassProc = OnSubclassWndProc;
@@ -121,12 +117,9 @@ namespace PulseDesk
                 RemoveWindowSubclass(_hwnd, _subclassProc, 0);
             }
 
-            _trayIcon.Clicked -= OnTrayIconClicked;
-            _trayIcon.Dispose();
-            _ramTrayIcon.Clicked -= OnTrayIconClicked;
-            _ramTrayIcon.Dispose();
-            _gpuTrayIcon.Clicked -= OnTrayIconClicked;
-            _gpuTrayIcon.Dispose();
+            DisposeTrayIcon(ref _trayIcon);
+            DisposeTrayIcon(ref _ramTrayIcon);
+            DisposeTrayIcon(ref _gpuTrayIcon);
 
             _fetchTimer.Stop();
             _fetchTimer.Tick -= FetchTick;
@@ -140,7 +133,9 @@ namespace PulseDesk
             IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam,
             nuint uIdSubclass, nuint dwRefData)
         {
-            if (uMsg == WM_SIZE && (int)wParam == SIZE_MINIMIZED)
+            if (uMsg == WM_SIZE && (int)wParam == SIZE_MINIMIZED
+                && _settings.MinimizeToTray
+                && (_trayIcon is not null || _ramTrayIcon is not null || _gpuTrayIcon is not null))
             {
                 // Hide the window from the taskbar; the tray icon stays visible.
                 ShowWindow(_hwnd, SW_HIDE);
@@ -259,7 +254,7 @@ namespace PulseDesk
             CpuValueText.Text = s.TotalPercent.ToString("F0", CultureInfo.CurrentCulture) + "%";
             CpuProgress.Value = s.TotalPercent;
             CpuDetailText.Text = $"User {s.UserPercent:F0}% · Kernel {s.KernelPercent:F0}% · Idle {s.IdlePercent:F0}%";
-            _trayIcon.UpdatePercent((int)s.TotalPercent);
+            _trayIcon?.UpdatePercent((int)s.TotalPercent);
         }
 
         private void ApplyTopCpuProcesses(IReadOnlyList<ProcessCpuSample> samples)
@@ -294,7 +289,7 @@ namespace PulseDesk
             MemValueText.Text = s.LoadPercent.ToString(CultureInfo.CurrentCulture) + "%";
             MemProgress.Value = s.LoadPercent;
             MemDetailText.Text = $"{ByteFormatter.Format(s.UsedBytes)} used of {ByteFormatter.Format(s.TotalBytes)} ({ByteFormatter.Format(s.AvailableBytes)} free)";
-            _ramTrayIcon.UpdatePercent((int)s.LoadPercent);
+            _ramTrayIcon?.UpdatePercent((int)s.LoadPercent);
         }
 
         private void ApplyGpu(GpuSample? sample)
@@ -320,7 +315,7 @@ namespace PulseDesk
             GpuProgress.Value = s.MaximumPercent;
             GpuDetailText.Text = $"Avg {s.AveragePercent:F0}% across 3D engines";
             GpuTopProcessesEmptyText.Text = "Measuring…";
-            _gpuTrayIcon.UpdatePercent((int)s.MaximumPercent);
+            _gpuTrayIcon?.UpdatePercent((int)s.MaximumPercent);
         }
 
         private void ApplyTopGpuProcesses(IReadOnlyList<ProcessGpuSample> samples)
@@ -464,6 +459,69 @@ namespace PulseDesk
             value.Text = "—";
             bar.Value = 0;
             detail.Text = $"Unavailable · {reason}";
+        }
+
+        private void OnSettingsClicked(object sender, RoutedEventArgs e)
+        {
+            var showSettings = DashboardView.Visibility == Visibility.Visible;
+            DashboardView.Visibility = showSettings ? Visibility.Collapsed : Visibility.Visible;
+            SettingsHost.Visibility = showSettings ? Visibility.Visible : Visibility.Collapsed;
+            SettingsButtonIcon.Glyph = showSettings ? "\uE72B" : "\uE713";
+            ToolTipService.SetToolTip(SettingsButton, showSettings ? "Back" : "Settings");
+
+            if (showSettings && _settingsPage is null)
+            {
+                _settingsPage = new SettingsPage(_settings);
+                _settingsPage.SettingsChanged += OnSettingsChanged;
+                SettingsHost.Content = _settingsPage;
+            }
+        }
+
+        private void OnSettingsChanged()
+        {
+            ApplyTrayIconSettings();
+            _fetchTimer.Interval = TimeSpan.FromMilliseconds(_settings.PollingIntervalMs);
+        }
+
+        private void ApplyTrayIconSettings()
+        {
+            if (_settings.CpuTrayIconEnabled && _trayIcon is null)
+            {
+                _trayIcon = new TrayIconService(iconId: 1, label: "PulseDesk · CPU", accentColor: 0x00E0A030);
+                _trayIcon.Clicked += OnTrayIconClicked;
+            }
+            else if (!_settings.CpuTrayIconEnabled)
+            {
+                DisposeTrayIcon(ref _trayIcon);
+            }
+
+            if (_settings.RamTrayIconEnabled && _ramTrayIcon is null)
+            {
+                _ramTrayIcon = new TrayIconService(iconId: 2, label: "PulseDesk · RAM", accentColor: 0x00D050D0);
+                _ramTrayIcon.Clicked += OnTrayIconClicked;
+            }
+            else if (!_settings.RamTrayIconEnabled)
+            {
+                DisposeTrayIcon(ref _ramTrayIcon);
+            }
+
+            if (_settings.GpuTrayIconEnabled && _gpuTrayIcon is null)
+            {
+                _gpuTrayIcon = new TrayIconService(iconId: 3, label: "PulseDesk · GPU", accentColor: 0x000088FF);
+                _gpuTrayIcon.Clicked += OnTrayIconClicked;
+            }
+            else if (!_settings.GpuTrayIconEnabled)
+            {
+                DisposeTrayIcon(ref _gpuTrayIcon);
+            }
+        }
+
+        private void DisposeTrayIcon(ref TrayIconService? icon)
+        {
+            if (icon is null) return;
+            icon.Clicked -= OnTrayIconClicked;
+            icon.Dispose();
+            icon = null;
         }
 
         private readonly record struct MetricsSnapshot(

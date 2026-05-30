@@ -24,25 +24,36 @@
             Padding="28,24,28,18"
             BorderThickness="0,0,0,1"
             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
-            <StackPanel Spacing="4">
-                <TextBlock
-                    Text="PulseDesk"
-                    Style="{ThemeResource TitleLargeTextBlockStyle}" />
-                <TextBlock
-                    Text="Your Windows machine, explained."
-                    Opacity="0.75"
-                    Style="{ThemeResource BodyTextBlockStyle}" />
-                <TextBlock
-                    x:Name="SummaryText"
-                    Margin="0,6,0,0"
-                    FontWeight="SemiBold"
-                    Opacity="0.85"
-                    Style="{ThemeResource BodyTextBlockStyle}"
-                    Text="Collecting initial metrics…" />
-            </StackPanel>
+            <Grid>
+                <StackPanel Spacing="4">
+                    <TextBlock
+                        Text="PulseDesk"
+                        Style="{ThemeResource TitleLargeTextBlockStyle}" />
+                    <TextBlock
+                        Text="Your Windows machine, explained."
+                        Opacity="0.75"
+                        Style="{ThemeResource BodyTextBlockStyle}" />
+                    <TextBlock
+                        x:Name="SummaryText"
+                        Margin="0,6,0,0"
+                        FontWeight="SemiBold"
+                        Opacity="0.85"
+                        Style="{ThemeResource BodyTextBlockStyle}"
+                        Text="Collecting initial metrics…" />
+                </StackPanel>
+                <Button
+                    x:Name="SettingsButton"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Padding="8"
+                    Click="OnSettingsClicked"
+                    ToolTipService.ToolTip="Settings">
+                    <FontIcon x:Name="SettingsButtonIcon" Glyph="&#xE713;" FontSize="16" />
+                </Button>
+            </Grid>
         </Border>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer x:Name="DashboardView" Grid.Row="1" VerticalScrollBarVisibility="Auto">
             <StackPanel Padding="28,20,28,28" Spacing="20">
 
                 <Grid x:Name="MetricGrid" ColumnSpacing="16" RowSpacing="16">
@@ -291,5 +302,7 @@
                 </StackPanel>
             </StackPanel>
         </ScrollViewer>
+
+        <ContentControl x:Name="SettingsHost" Grid.Row="1" Visibility="Collapsed" />
     </Grid>
 </Window>
