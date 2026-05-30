@@ -48,6 +48,15 @@
                 Margin="0,16,0,4" />
 
             <controls:SettingsCard
+                Header="Start with Windows"
+                Description="Automatically launch PulseDesk when you sign in">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE7E8;" />
+                </controls:SettingsCard.HeaderIcon>
+                <ToggleSwitch x:Name="StartupToggle" />
+            </controls:SettingsCard>
+
+            <controls:SettingsCard
                 Header="Minimize to tray"
                 Description="Hide the window to the system tray when minimized">
                 <controls:SettingsCard.HeaderIcon>

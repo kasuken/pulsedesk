@@ -38,6 +38,7 @@ namespace PulseDesk
         private readonly ObservableCollection<ProcessRowViewModel> _topGpuItems = new();
         private readonly ObservableCollection<string> _lagFindingItems = new();
         private readonly SettingsService _settings = new();
+        private readonly StartupService _startup = new();
         private TrayIconService? _trayIcon;
         private TrayIconService? _ramTrayIcon;
         private TrayIconService? _gpuTrayIcon;
@@ -559,7 +560,7 @@ namespace PulseDesk
 
             if (showSettings && _settingsPage is null)
             {
-                _settingsPage = new SettingsPage(_settings);
+                _settingsPage = new SettingsPage(_settings, _startup);
                 _settingsPage.SettingsChanged += OnSettingsChanged;
                 SettingsHost.Content = _settingsPage;
             }

@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using PulseDesk.Services;
 using System;
+using System.Threading.Tasks;
 using Windows.ApplicationModel;
 
 namespace PulseDesk;
@@ -9,13 +10,15 @@ namespace PulseDesk;
 public sealed partial class SettingsPage : UserControl
 {
     private readonly SettingsService _settings;
+    private readonly StartupService _startup;
     private bool _initializing = true;
 
     public event Action? SettingsChanged;
 
-    public SettingsPage(SettingsService settings)
+    public SettingsPage(SettingsService settings, StartupService startup)
     {
         _settings = settings;
+        _startup = startup;
         InitializeComponent();
         LoadSettings();
         _initializing = false;
@@ -29,11 +32,13 @@ public sealed partial class SettingsPage : UserControl
         MinimizeToTrayToggle.IsOn = _settings.MinimizeToTray;
 
         SelectPollingInterval(_settings.PollingIntervalMs);
+        _ = LoadStartupStateAsync();
 
         CpuTrayToggle.Toggled += OnSettingToggled;
         RamTrayToggle.Toggled += OnSettingToggled;
         GpuTrayToggle.Toggled += OnSettingToggled;
         MinimizeToTrayToggle.Toggled += OnSettingToggled;
+        StartupToggle.Toggled += OnStartupToggled;
         PollingIntervalComboBox.SelectionChanged += OnPollingIntervalChanged;
 
         try
@@ -83,6 +88,37 @@ public sealed partial class SettingsPage : UserControl
         {
             _settings.PollingIntervalMs = ms;
             SettingsChanged?.Invoke();
+        }
+    }
+
+    private async Task LoadStartupStateAsync()
+    {
+        var enabled = await _startup.IsEnabledAsync();
+        StartupToggle.IsOn = enabled;
+
+        if (await _startup.IsDisabledByUserAsync())
+        {
+            StartupToggle.IsEnabled = false;
+        }
+    }
+
+    private async void OnStartupToggled(object sender, RoutedEventArgs e)
+    {
+        if (_initializing) return;
+
+        if (StartupToggle.IsOn)
+        {
+            var succeeded = await _startup.EnableAsync();
+            if (!succeeded)
+            {
+                _initializing = true;
+                StartupToggle.IsOn = false;
+                _initializing = false;
+            }
+        }
+        else
+        {
+            await _startup.DisableAsync();
         }
     }
 }
