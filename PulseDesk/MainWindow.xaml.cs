@@ -324,7 +324,7 @@ namespace PulseDesk
             var s = sample.Value;
             SetText(GpuValueText, s.MaximumPercent.ToString("F0", CultureInfo.CurrentCulture) + "%");
             SetValue(GpuProgress, s.MaximumPercent);
-            SetText(GpuDetailText, $"Avg {s.AveragePercent:F0}% across 3D engines");
+            // SetText(GpuDetailText, $"Avg {s.AveragePercent:F0}% across 3D engines");
             GpuTopProcessesEmptyText.Text = "Measuring…";
             _gpuTrayIcon?.UpdatePercent((int)s.MaximumPercent);
         }
