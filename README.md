@@ -42,6 +42,14 @@ A single window, live metrics, and short summaries that help you understand what
 - **System tray** — Minimizes to the notification area for always-on monitoring
 - **Responsive layout** — Adapts from 6 columns down to 1 on narrower windows
 - **Mica backdrop** — Native Windows 11 material for a clean, modern look
+- **Why it feels slow** — A built-in lag analyzer that explains the likely cause when your PC feels unresponsive
+- **Bottleneck detection** — Rule-based bottleneck analyzer that identifies CPU, GPU, memory, or I/O bottlenecks and surfaces plain-language recommendations (`BottleneckService`).
+- **Settings page** — Persistent user preferences for polling interval, startup behavior, and theme via the Settings UI and `SettingsService` (`SettingsPage.xaml`).
+- **Improved top-process sampling** — Lower-noise, more accurate top-process metrics including richer GPU/memory/cpu breakdowns (`TopProcessesService`).
+- **Tray enhancements** — Compact quick-view, pause/resume monitoring, and quick actions from the system tray (`TrayIconService`).
+- **Drive monitoring improvements** — Faster, more reliable per-drive enumeration and capacity updates (`DriveService`).
+- **Multi-arch packaging** — Updated MSIX publish profiles and build support for x86, x64 and ARM64.
+- **Reliability & smoothing** — Reduced noisy spikes and better fallbacks when counters or sensors are unavailable.
 
 ## Getting started
 
@@ -84,6 +92,21 @@ The app opens as a native Windows desktop window with live-updating metrics.
 
 > [!TIP]
 > Some metrics depend on the counters, drivers, and sensors exposed by the current machine. "Unavailable" usually means the underlying Windows data source is missing, not that PulseDesk failed.
+
+## Why it feels slow (lag analysis)
+
+PulseDesk includes a lightweight, rule-based analyzer that interprets the live metrics and surfaces plain-language explanations when it detects sustained pressure. The analysis runs locally (no cloud) and looks for correlated signals such as:
+
+- Sustained high CPU (with user/kernel breakdown) and top CPU-consuming processes
+- High memory load combined with low free RAM and the largest processes (risk of paging)
+- High GPU utilization and the top GPU processes
+- High peak temperatures that may trigger thermal throttling
+- Battery saver / on-battery power modes that limit performance
+- Low drive free space when memory pressure is present
+
+The UI shows a short status line and up to three top findings in the dashboard under "Why it feels slow." The analyzer is conservative — it requires metrics to be sustained across multiple polling intervals to avoid noisy or transient alerts.
+
+This feature is intended to give quick, actionable insight (e.g., which process or condition is most likely causing stutter) and to point you toward the next step (close an offending app, plug in your laptop, free disk space, etc.).
 
 ## Tech stack
 
