@@ -10,15 +10,15 @@
   IgnorableNamespaces="uap rescap desktop systemai">
 
   <Identity
-    Name="600743a2-fd56-408f-b83a-0e3605b26fb6"
-    Publisher="CN=barto"
-    Version="1.0.0.0" />
+    Name="emanuelebatolesi.PulseDesk"
+    Publisher="CN=Emanuele Bartolesi"
+    Version="1.0.3.0" />
 
-  <mp:PhoneIdentity PhoneProductId="600743a2-fd56-408f-b83a-0e3605b26fb6" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
+  <mp:PhoneIdentity PhoneProductId="2df4f837-f7e9-4f95-bd4a-6baa67922a3f" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
     <DisplayName>PulseDesk</DisplayName>
-    <PublisherDisplayName>barto</PublisherDisplayName>
+    <PublisherDisplayName>Emanuele Bartolesi</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
 
@@ -48,7 +48,7 @@
           <uap:Rotation Preference="portrait"/></uap:InitialRotationPreference>
       </uap:VisualElements>
       <Extensions>
-        <desktop:Extension Category="windows.startupTask" Executable="$targetnametoken$.exe" EntryPoint="Windows.FullTrustApplication">
+        <desktop:Extension Category="windows.startupTask" Executable="PulseDesk.exe" EntryPoint="Windows.FullTrustApplication">
           <desktop:StartupTask TaskId="PulseDesk" Enabled="false" DisplayName="PulseDesk" />
         </desktop:Extension>
       </Extensions>
